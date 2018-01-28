@@ -57,7 +57,7 @@ export default class TagEditorParam extends Component {
                 widget_type: undefined
             });
         }
-}
+    }
 
     setDimension(fieldId) {
         const { tag, onUpdate, databaseFields } = this.props;

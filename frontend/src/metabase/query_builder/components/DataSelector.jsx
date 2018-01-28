@@ -189,7 +189,7 @@ export default class DataSelector extends Component {
         this.setState({ activeStep });
     }
 
-    onChangeDatabase = (index) => {
+    onChangeDatabase = (index, schemaInSameStep) => {
         let database = this.state.databases[index];
         let schema = database && (database.schemas.length > 1 ? null : database.schemas[0]);
         if (database && database.tables.length === 0) {
@@ -206,7 +206,15 @@ export default class DataSelector extends Component {
 
         this.props.setDatabaseFn && this.props.setDatabaseFn(database.id);
 
-        this.nextStep(stateChange)
+        if (schemaInSameStep) {
+            if (database.schemas.length > 1) {
+                this.setState(stateChange)
+            } else {
+                this.nextStep(stateChange)
+            }
+        } else {
+            this.nextStep(stateChange)
+        }
     }
 
     onChangeSchema = (schema) => {
@@ -439,7 +447,6 @@ const SegmentAndDatabasePicker = ({ databases, selectedSchema, onChangeSchema, o
 }
 
 export const DatabaseSchemaPicker = ({ skipDatabaseSelection, databases, selectedDatabase, selectedSchema, onChangeSchema, onChangeDatabase }) => {
-
         if (databases.length === 0) {
             return <DataSelectorLoading />
         }
@@ -485,7 +492,7 @@ export const DatabaseSchemaPicker = ({ skipDatabaseSelection, databases, selecte
                         className="text-brand"
                         sections={sections}
                         onChange={onChangeSchema}
-                        onChangeSection={onChangeDatabase}
+                        onChangeSection={(dbId) => onChangeDatabase(dbId, true)}
                         itemIsSelected={(schema) => schema === selectedSchema}
                         renderSectionIcon={item =>
                             <Icon
