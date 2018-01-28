@@ -15,12 +15,18 @@ import { getMetadata } from "metabase/selectors/metadata";
 
 import _ from "underscore";
 
+// chooses a database
 const DATABASE_STEP = 'DATABASE';
+// chooses a database and a schema inside that database
 const SCHEMA_STEP = 'SCHEMA';
+// chooses a database and a schema and provides additional "Segments" option for jumping to SEGMENT_STEP
+const SCHEMA_AND_SEGMENTS_STEP = 'SCHEMA_AND_SEGMENTS';
+// chooses a table (database has already been selected)
 const TABLE_STEP = 'TABLE';
+// chooses a table field (table has already been selected)
 const FIELD_STEP = 'FIELD';
-const SEGMENT_STEP = 'SEGMENT';
-const SEGMENT_AND_DATABASE_STEP = 'SEGMENT_AND_DATABASE';
+// shows either table or segment list depending on which one is selected
+const SEGMENT_OR_TABLE_STEP = 'SEGMENT_OR_TABLE_STEP';
 
 @connect(state => ({metadata: getMetadata(state)}), { fetchTableMetadata })
 export default class DataSelector extends Component {
@@ -30,10 +36,10 @@ export default class DataSelector extends Component {
         let steps;
         if (props.setFieldFn) {
             steps = [SCHEMA_STEP, TABLE_STEP, FIELD_STEP];
+        } else if (props.setSourceTableFn && props.segments) {
+            steps = [SCHEMA_AND_SEGMENTS_STEP, SEGMENT_OR_TABLE_STEP];
         } else if (props.setSourceTableFn) {
             steps = [SCHEMA_STEP, TABLE_STEP];
-        } else if (props.segments) {
-            steps = [SCHEMA_STEP, SEGMENT_STEP];
         } else if (props.setDatabaseFn) {
             steps = [DATABASE_STEP];
         } else {
@@ -72,6 +78,7 @@ export default class DataSelector extends Component {
 
         const selectedDatabase = selectedDatabaseId ? databases.find(db => db.id === selectedDatabaseId) : null;
         const hasMultipleSchemas = selectedDatabase && _.uniq(selectedDatabase.tables, (t) => t.schema).length > 1;
+
         // remove the schema step if we are explicitly skipping db selection and
         // the selected db does not have more than one schema.
         if (!hasMultipleSchemas && props.skipDatabaseSelection) {
@@ -79,25 +86,30 @@ export default class DataSelector extends Component {
             selectedSchema = selectedDatabase.schemas[0];
         }
 
+        const selectedSegmentId = props.selectedSegmentId
+        const selectedSegment = selectedSegmentId ? props.segments.find(segment => segment.id === selectedSegmentId) : null;
+
         this.state = {
             databases,
             selectedDatabase,
             selectedSchema,
             selectedTable,
+            selectedSegment,
             selectedField: null,
             activeStep: steps[0],
             steps: steps,
             isLoading: false,
             includeTables: !!props.setSourceTableFn,
             includeFields: !!props.setFieldFn,
-            // TODO: Remove
-            showSegmentPicker: props.segments && props.segments.length > 0
         };
     }
 
     static propTypes = {
+        selectedDatabaseId: PropTypes.number,
+        selectedSchemaId: PropTypes.number,
         selectedTableId: PropTypes.number,
         selectedFieldId: PropTypes.number,
+        selectedSegmentId: PropTypes.number,
         databases: PropTypes.array.isRequired,
         segments: PropTypes.array,
         disabledTableIds: PropTypes.array,
@@ -137,13 +149,13 @@ export default class DataSelector extends Component {
         }
 
         // if (this.state.steps.includes(SEGMENT_STEP)) {
-            // activeStep = this.getSegmentId() ? SEGMENT_STEP : SEGMENT_AND_DATABASE_STEP;
+        //     activeStep = this.selectedSegment ? SEGMENT_STEP : SEGMENT_AND_DATABASE_STEP;
         // }
 
         this.setState({activeStep});
     }
 
-    nextStep = (stateChange) => {
+    nextStep = (stateChange = {}) => {
         let activeStepIndex = this.state.steps.indexOf(this.state.activeStep);
         if (activeStepIndex + 1 >= this.state.steps.length) {
             this.refs.popover.toggle();
@@ -221,13 +233,14 @@ export default class DataSelector extends Component {
     onChangeSegment = (item) => {
         if (item.segment != null) {
             this.props.setSourceSegmentFn && this.props.setSourceSegmentFn(item.segment.id);
+            this.nextStep({ selectedSegment: item.segment })
         }
     }
 
-    onChangeSegmentSection = () => {
-        this.setState({
-            showSegmentPicker: true
-        });
+    onShowSegmentSection = () => {
+        // Jumping to the next step SEGMENT_OR_TABLE_STEP without a db/schema
+        // indicates that we want to show the segment section
+        this.nextStep({ selectedDatabase: null, selectedSchema: null })
     }
 
     getTriggerElement() {
@@ -235,7 +248,7 @@ export default class DataSelector extends Component {
         const { selectedDatabase, selectedSegment, selectedTable, selectedField, steps } = this.state;
 
         let content;
-        if (steps.includes(SEGMENT_STEP) || steps.includes(SEGMENT_AND_DATABASE_STEP)) {
+        if (steps.includes(SEGMENT_OR_TABLE_STEP)) {
             if (selectedTable) {
                 content = <span className="text-grey no-decoration">{selectedTable.display_name || selectedTable.name}</span>;
             } else if (selectedSegment) {
@@ -289,7 +302,21 @@ export default class DataSelector extends Component {
                  onChangeSchema={this.onChangeSchema}
                  onChangeDatabase={this.onChangeDatabase}
             />;
-            case TABLE_STEP: return <TablePicker
+            case SCHEMA_AND_SEGMENTS_STEP: return <SegmentAndDatabasePicker
+                databases={databases}
+                selectedSchema={selectedSchema}
+                onChangeSchema={this.onChangeSchema}
+                onShowSegmentSection={this.onShowSegmentSection}
+                onChangeDatabase={this.onChangeDatabase}
+            />;
+            case TABLE_STEP:
+                const hasMultipleDatabases = databases.length > 1;
+                const hasMultipleSchemas = selectedDatabase && _.uniq(selectedDatabase.tables, (t) => t.schema).length > 1;
+                const hasSegments = !!segments;
+                // is this logic becoming obsolete ...?
+                const canGoBack = this.hasPreviousStep() && (hasMultipleDatabases || hasMultipleSchemas || hasSegments)
+
+                return <TablePicker
                  selectedDatabase={selectedDatabase}
                  selectedSchema={selectedSchema}
                  selectedTable={selectedTable}
@@ -297,8 +324,7 @@ export default class DataSelector extends Component {
                  segments={segments}
                  disabledTableIds={disabledTableIds}
                  onChangeTable={this.onChangeTable}
-                 hasPreviousStep={this.hasPreviousStep}
-                 onBack={this.onBack}
+                 onBack={canGoBack && this.onBack}
             />;
             case FIELD_STEP: return <FieldPicker
                  isLoading={isLoading}
@@ -307,20 +333,28 @@ export default class DataSelector extends Component {
                  onChangeField={this.onChangeField}
                  onBack={this.onBack}
             />;
-            case SEGMENT_STEP: return <SegmentPicker
-                segments={segments}
-                selectedSegment={selectedSegment}
-                disabledSegmentIds={disabledSegmentIds}
-                onBack={this.onBack}
-                onChangeSegment={this.onChangeSegment}
-            />;
-            case SEGMENT_AND_DATABASE_STEP: return <SegmentAndDatabasePicker
-                 databases={databases}
-                 selectedSchema={selectedSchema}
-                 onChangeSchema={this.onChangeSchema}
-                 onChangeSegmentSection={this.onChangeSegmentSection}
-                 onChangeDatabase={this.onChangeDatabase}
-            />;
+            case SEGMENT_OR_TABLE_STEP:
+                if (selectedDatabase && selectedSchema) {
+                    return <TablePicker
+                         selectedDatabase={selectedDatabase}
+                         selectedSchema={selectedSchema}
+                         selectedTable={selectedTable}
+                         databases={databases}
+                         segments={segments}
+                         disabledTableIds={disabledTableIds}
+                         onChangeTable={this.onChangeTable}
+                         hasPreviousStep={this.hasPreviousStep}
+                         onBack={this.onBack}
+                    />
+                } else {
+                    return <SegmentPicker
+                        segments={segments}
+                        selectedSegment={selectedSegment}
+                        disabledSegmentIds={disabledSegmentIds}
+                        onBack={this.onBack}
+                        onChangeSegment={this.onChangeSegment}
+                    />
+                }
         }
     }
 
@@ -371,7 +405,7 @@ const DatabasePicker = ({ databases, selectedDatabase, onChangeTable }) => {
     );
 }
 
-const SegmentAndDatabasePicker = ({ databases, selectedSchema, onChangeSchema, onChangeSegmentSection, onChangeDatabase }) => {
+const SegmentAndDatabasePicker = ({ databases, selectedSchema, onChangeSchema, onShowSegmentSection, onChangeDatabase }) => {
     const segmentItem = [{ name: 'Segments', items: [], icon: 'segment'}];
 
     const sections = segmentItem.concat(databases.map(database => {
@@ -395,7 +429,7 @@ const SegmentAndDatabasePicker = ({ databases, selectedSchema, onChangeSchema, o
             sections={sections}
             onChange={onChangeSchema}
             onChangeSection={(index) => index === 0 ?
-                onChangeSegmentSection() :
+                onShowSegmentSection() :
                 onChangeDatabase(index - segmentItem.length)
             }
             itemIsSelected={(schema) => selectedSchema === schema}
@@ -475,17 +509,12 @@ export const DatabaseSchemaPicker = ({ skipDatabaseSelection, databases, selecte
 
     }
 
-export const TablePicker = ({ selectedDatabase, selectedSchema, selectedTable, databases, segments, disabledTableIds, onChangeTable, hasPreviousStep, onBack }) => {
+export const TablePicker = ({ selectedDatabase, selectedSchema, selectedTable, databases, segments, disabledTableIds, onChangeTable, onBack }) => {
     const isSavedQuestionList = selectedDatabase.is_saved_questions;
-    const hasMultipleDatabases = databases.length > 1;
-    const hasMultipleSchemas = selectedDatabase && _.uniq(selectedDatabase.tables, (t) => t.schema).length > 1;
-    const hasSegments = !!segments;
-    const canGoBack = (hasMultipleDatabases || hasMultipleSchemas || hasSegments) && hasPreviousStep();
-
     let header = (
         <div className="flex flex-wrap align-center">
-                <span className="flex align-center text-brand-hover cursor-pointer" onClick={canGoBack && onBack}>
-                    {canGoBack && <Icon name="chevronleft" size={18} /> }
+                <span className="flex align-center text-brand-hover cursor-pointer" onClick={onBack}>
+                    {onBack && <Icon name="chevronleft" size={18} /> }
                     <span className="ml1">{selectedDatabase.name}</span>
                 </span>
             { selectedSchema.name && <span className="ml1 text-slate">- {selectedSchema.name}</span>}
@@ -586,7 +615,7 @@ export class FieldPicker extends Component {
 }
 
 //TODO: refactor this. lots of shared code with renderTablePicker = () =>
-export const SegmentPicker = (segments, selectedSegment, disabledSegmentIds, onBack, onChangeSegment) => {
+export const SegmentPicker = ({ segments, selectedSegment, disabledSegmentIds, onBack, onChangeSegment }) => {
     const header = (
         <span className="flex align-center">
                 <span className="flex align-center text-slate cursor-pointer" onClick={onBack}>
@@ -628,16 +657,14 @@ export const SegmentPicker = (segments, selectedSegment, disabledSegmentIds, onB
             searchable
             searchPlaceholder={t`Find a segment`}
             onChange={onChangeSegment}
-            // return this.props.datasetQuery.segment;
             itemIsSelected={(item) => selectedSegment && item.segment ? item.segment.id === selectedSegment : false}
             itemIsClickable={(item) => item.segment && !item.disabled}
             renderItemIcon={(item) => item.segment ? <Icon name="segment" size={18} /> : null}
-            hideSingleSectionTitle={true}
         />
     );
 }
 
-const DataSelectorLoading = (header) => {
+const DataSelectorLoading = ({ header }) => {
     if (header) {
         return (
             <section className="List-section List-section--open" style={{width: 300}}>
