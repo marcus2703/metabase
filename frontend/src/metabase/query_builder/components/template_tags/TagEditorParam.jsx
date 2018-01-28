@@ -85,10 +85,10 @@ export default class TagEditorParam extends Component {
     render() {
         const { tag, database, databases, databaseFields } = this.props;
 
-        let dabaseHasSchemas = false;
+        let databaseHasSchemas = false;
         if (databaseFields) {
             let schemas = _.chain(databaseFields).pluck("schema").uniq().value();
-            dabaseHasSchemas = schemas.length > 1;
+            databaseHasSchemas = schemas.length > 1;
         }
 
         let widgetOptions, table;
