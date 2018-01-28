@@ -390,7 +390,8 @@ export const loadMetadataForCard = createThunkAction(LOAD_METADATA_FOR_CARD, (ca
             }
 
             if (singleQuery instanceof NativeQuery && singleQuery.databaseId() != null) {
-                await dispatch(loadDatabaseFields(singleQuery.databaseId()));
+                // Only load what is currently needed, not all tables at once
+                // await dispatch(loadDatabaseFields(singleQuery.databaseId()));
             }
         }
 
