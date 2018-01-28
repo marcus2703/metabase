@@ -86,6 +86,9 @@ export default class DataSelector extends Component {
             selectedSchema = selectedDatabase.schemas[0];
         }
 
+        // if db is selected but schema isn't, default to the first schema (
+        selectedSchema = selectedSchema || (selectedDatabase && selectedDatabase.schemas[0]);
+
         const selectedSegmentId = props.selectedSegmentId
         const selectedSegment = selectedSegmentId ? props.segments.find(segment => segment.id === selectedSegmentId) : null;
 
@@ -99,8 +102,6 @@ export default class DataSelector extends Component {
             activeStep: steps[0],
             steps: steps,
             isLoading: false,
-            includeTables: !!props.setSourceTableFn,
-            includeFields: !!props.setFieldFn,
         };
     }
 
@@ -119,7 +120,6 @@ export default class DataSelector extends Component {
         setSourceTableFn: PropTypes.func,
         setSourceSegmentFn: PropTypes.func,
         isInitiallyOpen: PropTypes.bool,
-        includeFields: PropTypes.bool,
         renderAsSelect: PropTypes.bool,
     };
 
@@ -130,7 +130,7 @@ export default class DataSelector extends Component {
     };
 
     componentWillMount() {
-        if (this.props.databases.length === 1 && !this.props.segments) {
+        if (!this.props.selectedDatabaseId && this.props.databases.length === 1 && !this.props.segments) {
             setTimeout(() => this.onChangeDatabase(0));
         }
         this.hydrateActiveStep();
@@ -147,10 +147,6 @@ export default class DataSelector extends Component {
             activeStep = FIELD_STEP;
             this.fetchStepData(FIELD_STEP);
         }
-
-        // if (this.state.steps.includes(SEGMENT_STEP)) {
-        //     activeStep = this.selectedSegment ? SEGMENT_STEP : SEGMENT_AND_DATABASE_STEP;
-        // }
 
         this.setState({activeStep});
     }
@@ -207,7 +203,10 @@ export default class DataSelector extends Component {
             selectedDatabase: database,
             selectedSchema: schema
         };
-        schema ? this.nextStep(stateChange) : this.setState(stateChange);
+
+        this.props.setDatabaseFn && this.props.setDatabaseFn(database.id);
+
+        this.nextStep(stateChange)
     }
 
     onChangeSchema = (schema) => {
@@ -218,8 +217,6 @@ export default class DataSelector extends Component {
         if (item.table != null) {
             this.props.setSourceTableFn && this.props.setSourceTableFn(item.table.id);
             this.nextStep({selectedTable: item.table});
-        } else if (item.database != null) {
-            this.props.setDatabaseFn && this.props.setDatabaseFn(item.database.id);
         }
     }
 
@@ -292,7 +289,7 @@ export default class DataSelector extends Component {
             case DATABASE_STEP: return <DatabasePicker
                 databases={databases}
                 selectedDatabase={selectedDatabase}
-                onChangeTable={this.onChangeTable}
+                onChangeDatabase={this.onChangeDatabase}
             />;
             case SCHEMA_STEP: return <DatabaseSchemaPicker
                  skipDatabaseSelection={skipDatabaseSelection}
@@ -310,11 +307,7 @@ export default class DataSelector extends Component {
                 onChangeDatabase={this.onChangeDatabase}
             />;
             case TABLE_STEP:
-                const hasMultipleDatabases = databases.length > 1;
-                const hasMultipleSchemas = selectedDatabase && _.uniq(selectedDatabase.tables, (t) => t.schema).length > 1;
-                const hasSegments = !!segments;
-                // is this logic becoming obsolete ...?
-                const canGoBack = this.hasPreviousStep() && (hasMultipleDatabases || hasMultipleSchemas || hasSegments)
+                const canGoBack = this.hasPreviousStep()
 
                 return <TablePicker
                  selectedDatabase={selectedDatabase}
@@ -379,14 +372,16 @@ export default class DataSelector extends Component {
 //     return this.state.selectedField && this.state.selectedField.id;
 // }
 
-const DatabasePicker = ({ databases, selectedDatabase, onChangeTable }) => {
+
+const DatabasePicker = ({ databases, selectedDatabase, onChangeDatabase }) => {
     if (databases.length === 0) {
         return <DataSelectorLoading />
     }
 
     let sections = [{
-        items: databases.map(database => ({
+        items: databases.map((database, index) => ({
             name: database.name,
+            index,
             database: database
         }))
     }];
@@ -397,7 +392,7 @@ const DatabasePicker = ({ databases, selectedDatabase, onChangeTable }) => {
             key="databasePicker"
             className="text-brand"
             sections={sections}
-            onChange={onChangeTable}
+            onChange={(db) => onChangeDatabase(db.index)}
             itemIsSelected={(item) => selectedDatabase && item.database.id === selectedDatabase.id}
             renderItemIcon={() => <Icon className="Icon text-default" name="database" size={18} />}
             showItemArrows={false}
