@@ -57,7 +57,7 @@ export default class TagEditorParam extends Component {
                 widget_type: undefined
             });
         }
-    }
+}
 
     setDimension(fieldId) {
         const { tag, onUpdate, databaseFields } = this.props;
@@ -84,12 +84,6 @@ export default class TagEditorParam extends Component {
 
     render() {
         const { tag, database, databases, databaseFields } = this.props;
-
-        let databaseHasSchemas = false;
-        if (databaseFields) {
-            let schemas = _.chain(databaseFields).pluck("schema").uniq().value();
-            databaseHasSchemas = schemas.length > 1;
-        }
 
         let widgetOptions, table;
         if (tag.type === "dimension" && Array.isArray(tag.dimension)) {

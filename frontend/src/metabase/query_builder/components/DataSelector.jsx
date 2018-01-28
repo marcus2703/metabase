@@ -86,7 +86,7 @@ export default class DataSelector extends Component {
             selectedSchema = selectedDatabase.schemas[0];
         }
 
-        // if db is selected but schema isn't, default to the first schema (
+        // if a db is selected but schema isn't, default to the first schema
         selectedSchema = selectedSchema || (selectedDatabase && selectedDatabase.schemas[0]);
 
         const selectedSegmentId = props.selectedSegmentId
@@ -245,7 +245,14 @@ export default class DataSelector extends Component {
         const { selectedDatabase, selectedSegment, selectedTable, selectedField, steps } = this.state;
 
         let content;
-        if (steps.includes(SEGMENT_OR_TABLE_STEP)) {
+        if (steps.includes(FIELD_STEP)) {
+            if (selectedField) {
+                content = <span className="text-grey no-decoration">{selectedField.display_name || selectedField.name}</span>;
+            } else {
+                content = <span className="text-grey-4 no-decoration">{t`Select...`}</span>;
+            }
+        }
+        else if (steps.includes(SEGMENT_OR_TABLE_STEP)) {
             if (selectedTable) {
                 content = <span className="text-grey no-decoration">{selectedTable.display_name || selectedTable.name}</span>;
             } else if (selectedSegment) {
@@ -259,12 +266,6 @@ export default class DataSelector extends Component {
             } else {
                 content = <span className="text-grey-4 no-decoration">{t`Select a table`}</span>;
             }
-        } else if (steps.includes(FIELD_STEP)) {
-           if (selectedField) {
-               content = <span className="text-grey no-decoration">{selectedField.display_name || selectedField.name}</span>;
-           } else {
-               content = <span className="text-grey-4 no-decoration">{t`Select...`}</span>;
-           }
         } else {
             if (selectedDatabase) {
                 content = <span className="text-grey no-decoration">{selectedDatabase.name}</span>;
@@ -600,7 +601,7 @@ export class FieldPicker extends Component {
                     sections={sections}
                     searchable
                     onChange={onChangeField}
-                    itemIsSelected={(item) => (item.field && selectedField) ? selectedField.id : false}
+                    itemIsSelected={(item) => (item.field && selectedField) ? (item.field.id === selectedField.id) : false}
                     itemIsClickable={(item) => item.field && !item.disabled}
                     renderItemIcon={(item) => item.field ? <Icon name="table2" size={18} /> : null}
                 />
