@@ -137,50 +137,49 @@ export default class DataSelector extends Component {
     }
 
     hydrateActiveStep() {
-        let activeStep = this.state.steps[0];
-
         if (this.props.selectedTableId) {
             if (this.props.segments) {
-                activeStep = SEGMENT_OR_TABLE_STEP;
+                this.switchToStep(SEGMENT_OR_TABLE_STEP);
             } else {
-                activeStep = TABLE_STEP;
+                this.switchToStep(TABLE_STEP);
             }
         }
-
-        if (this.props.selectedFieldId) {
-            activeStep = FIELD_STEP;
-            this.fetchStepData(FIELD_STEP);
+        else if (this.props.selectedFieldId) {
+            this.switchToStep(FIELD_STEP);
+        } else {
+            let firstStep = this.state.steps[0];
+            this.switchToStep(firstStep)
         }
-
-        this.setState({activeStep});
     }
 
     nextStep = (stateChange = {}) => {
         let activeStepIndex = this.state.steps.indexOf(this.state.activeStep);
         if (activeStepIndex + 1 >= this.state.steps.length) {
+            this.setState(stateChange)
             this.refs.popover.toggle();
         } else {
-            activeStepIndex += 1;
+            const nextStep = this.state.steps[activeStepIndex + 1]
+            this.switchToStep(nextStep, stateChange);
+        }
+    }
+    
+    switchToStep = async (stepName, stateChange = {}) => {
+        stepName = stepName || this.state.activeStep
+
+        const loadersForSteps = {
+            [FIELD_STEP]: () => this.props.fetchTableMetadata(this.state.selectedTable.id)
+        }
+
+        if (loadersForSteps[stepName]) {
+            this.setState({ isLoading: true });
+            await loadersForSteps[stepName]();
         }
 
         this.setState({
-            activeStep: this.state.steps[activeStepIndex],
-            ...stateChange
-        }, this.fetchStepData);
-    }
-
-    fetchStepData = async (stepName) => {
-        let promise, results;
-        stepName = stepName || this.state.activeStep;
-        switch(stepName) {
-            case FIELD_STEP: promise = this.props.fetchTableMetadata(this.state.selectedTable.id);
-        }
-        if (promise) {
-            this.setState({isLoading: true});
-            results = await promise;
-            this.setState({isLoading: false});
-        }
-        return results;
+            activeStep: stepName,
+            isLoading: false,
+            ...stateChange,
+        });
     }
 
     hasPreviousStep = () => {
@@ -189,8 +188,8 @@ export default class DataSelector extends Component {
 
     onBack = () => {
         if (!this.hasPreviousStep()) { return; }
-        const activeStep = this.state.steps[this.state.steps.indexOf(this.state.activeStep) - 1];
-        this.setState({ activeStep });
+        const previousStep = this.state.steps[this.state.steps.indexOf(this.state.activeStep) - 1];
+        this.switchToStep(previousStep)
     }
 
     onChangeDatabase = (index, schemaInSameStep) => {
