@@ -91,6 +91,7 @@ export default class DataSelector extends Component {
 
         const selectedSegmentId = props.selectedSegmentId
         const selectedSegment = selectedSegmentId ? props.segments.find(segment => segment.id === selectedSegmentId) : null;
+        const selectedField = props.selectedFieldId ? props.metadata.fields[props.selectedFieldId] : null
 
         this.state = {
             databases,
@@ -98,8 +99,8 @@ export default class DataSelector extends Component {
             selectedSchema,
             selectedTable,
             selectedSegment,
-            selectedField: null,
-            activeStep: steps[0],
+            selectedField,
+            activeStep: null,
             steps: steps,
             isLoading: false,
         };
@@ -137,16 +138,16 @@ export default class DataSelector extends Component {
     }
 
     hydrateActiveStep() {
-        if (this.props.selectedTableId) {
+        if (this.props.selectedFieldId) {
+            this.switchToStep(FIELD_STEP);
+        } else if (this.props.selectedTableId) {
             if (this.props.segments) {
                 this.switchToStep(SEGMENT_OR_TABLE_STEP);
             } else {
                 this.switchToStep(TABLE_STEP);
             }
         }
-        else if (this.props.selectedFieldId) {
-            this.switchToStep(FIELD_STEP);
-        } else {
+        else {
             let firstStep = this.state.steps[0];
             this.switchToStep(firstStep)
         }
@@ -164,10 +165,10 @@ export default class DataSelector extends Component {
     }
     
     switchToStep = async (stepName, stateChange = {}) => {
-        stepName = stepName || this.state.activeStep
+        // const mergedState =  { ...this.state, ...stateChange }
 
         const loadersForSteps = {
-            [FIELD_STEP]: () => this.props.fetchTableMetadata(this.state.selectedTable.id)
+            [FIELD_STEP]: () => this.state.selectedTable && this.props.fetchTableMetadata(this.state.selectedTable.id)
         }
 
         if (loadersForSteps[stepName]) {
@@ -361,6 +362,8 @@ export default class DataSelector extends Component {
                     />
                 }
         }
+
+        return null;
     }
 
     render() {
