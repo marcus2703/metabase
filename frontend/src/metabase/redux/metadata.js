@@ -480,6 +480,17 @@ export const fetchDatabasesWithMetadata = createThunkAction(FETCH_DATABASES_WITH
     };
 });
 
+const FETCH_REAL_DATABASES_WITH_METADATA = "metabase/metadata/FETCH_REAL_DATABASES_WITH_METADATA";
+export const fetchRealDatabasesWithMetadata = createThunkAction(FETCH_REAL_DATABASES_WITH_METADATA, (reload = false) => {
+    return async (dispatch, getState) => {
+        await dispatch(fetchRealDatabases())
+        const databases = getIn(getState(), ['metadata', 'databases']);
+        await Promise.all(Object.values(databases).map(database =>
+            dispatch(fetchDatabaseMetadata(database.id))
+        ));
+    };
+});
+
 const databases = handleActions({
 }, {});
 
