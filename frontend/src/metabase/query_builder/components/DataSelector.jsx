@@ -140,7 +140,11 @@ export default class DataSelector extends Component {
         let activeStep = this.state.steps[0];
 
         if (this.props.selectedTableId) {
-            activeStep = TABLE_STEP;
+            if (this.props.segments) {
+                activeStep = SEGMENT_OR_TABLE_STEP;
+            } else {
+                activeStep = TABLE_STEP;
+            }
         }
 
         if (this.props.selectedFieldId) {
@@ -377,11 +381,6 @@ export default class DataSelector extends Component {
     }
 }
 
-// getFieldId() {
-//     return this.state.selectedField && this.state.selectedField.id;
-// }
-
-
 const DatabasePicker = ({ databases, selectedDatabase, onChangeDatabase }) => {
     if (databases.length === 0) {
         return <DataSelectorLoading />
@@ -432,10 +431,11 @@ const SegmentAndDatabasePicker = ({ databases, selectedSchema, onChangeSchema, o
             className="text-brand"
             sections={sections}
             onChange={onChangeSchema}
-            onChangeSection={(index) => index === 0 ?
-                onShowSegmentSection() :
-                onChangeDatabase(index - segmentItem.length)
-            }
+            onChangeSection={(index) => {
+                index === 0
+                    ? onShowSegmentSection()
+                    : onChangeDatabase(index - segmentItem.length, true)
+            }}
             itemIsSelected={(schema) => selectedSchema === schema}
             renderSectionIcon={(section) => <Icon className="Icon text-default" name={section.icon || "database"} size={18} />}
             renderItemIcon={() => <Icon name="folder" size={16} />}
