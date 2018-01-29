@@ -139,6 +139,7 @@ export default class TagEditorParam extends Component {
                             renderAsSelect={true}
                             skipDatabaseSelection={true}
                             className="AdminSelect flex align-center"
+                            isInitiallyOpen={!tag.dimension}
                         />
                     </div>
                 }
