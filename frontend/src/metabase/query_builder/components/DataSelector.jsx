@@ -165,21 +165,20 @@ export default class DataSelector extends Component {
     }
     
     switchToStep = async (stepName, stateChange = {}) => {
-        // const mergedState =  { ...this.state, ...stateChange }
+        const updatedState =  { ...this.state, ...stateChange, activeStep: stepName }
 
         const loadersForSteps = {
-            [FIELD_STEP]: () => this.state.selectedTable && this.props.fetchTableMetadata(this.state.selectedTable.id)
+            [FIELD_STEP]: () => updatedState.selectedTable && this.props.fetchTableMetadata(updatedState.selectedTable.id)
         }
 
         if (loadersForSteps[stepName]) {
-            this.setState({ isLoading: true });
+            this.setState({ ...updatedState, isLoading: true });
             await loadersForSteps[stepName]();
         }
 
         this.setState({
-            activeStep: stepName,
-            isLoading: false,
-            ...stateChange,
+            ...updatedState,
+            isLoading: false
         });
     }
 
