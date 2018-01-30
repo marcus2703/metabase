@@ -62,13 +62,25 @@ export const SchemaTableAndFieldDataSelector = (props) =>
     <DataSelector
         steps={[SCHEMA_STEP, TABLE_STEP, FIELD_STEP]}
         getTriggerElementContent={FieldTriggerContent}
+        triggerIconSize={12}
         renderAsSelect={true}
         {...props}
     />
-const FieldTriggerContent = ({ selectedField }) =>
-    selectedField
-        ? <span className="text-grey no-decoration">{selectedField.display_name || selectedField.name}</span>
-        : <span className="text-grey-4 no-decoration">{t`Select...`}</span>
+const FieldTriggerContent = ({ selectedDatabase, selectedField }) => {
+    if (!selectedField || !selectedField.table) {
+        return <span className="flex-full text-grey-4 no-decoration">{t`Select...`}</span>
+    } else {
+        const hasMultipleSchemas = selectedDatabase && _.uniq(selectedDatabase.tables, (t) => t.schema).length > 1;
+        return (
+            <div className="flex-full cursor-pointer">
+                <div className="h6 text-bold text-uppercase text-grey-2">
+                    {hasMultipleSchemas && (selectedField.table.schema + " > ")}{selectedField.table.display_name}
+                </div>
+                <div className="h4 text-bold text-default">{selectedField.name}</div>
+            </div>
+        )
+    }
+}
 
 export const DatabaseSchemaAndTableDataSelector = (props) =>
     <DataSelector
@@ -177,9 +189,12 @@ export default class DataSelector extends Component {
     };
 
     componentWillMount() {
-        if (!this.props.selectedDatabaseId && this.props.databases.length === 1 && !this.props.segments) {
+        const useOnlyAvailableDatabase =
+            !this.props.selectedDatabaseId && this.props.databases.length === 1 && !this.props.segments
+        if (useOnlyAvailableDatabase) {
             setTimeout(() => this.onChangeDatabase(0));
         }
+
         this.hydrateActiveStep();
     }
 
