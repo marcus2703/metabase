@@ -2,6 +2,7 @@ import React, { Component } from "react";
 import { connect } from "react-redux";
 import PropTypes from "prop-types";
 import { t } from 'c-3po';
+import cx from 'classnames'
 import Icon from "metabase/components/Icon.jsx";
 import PopoverWithTrigger from "metabase/components/PopoverWithTrigger.jsx";
 import AccordianList from "metabase/components/AccordianList.jsx";
@@ -18,6 +19,8 @@ import _ from "underscore";
 // chooses a database
 const DATABASE_STEP = 'DATABASE';
 // chooses a database and a schema inside that database
+const DATABASE_SCHEMA_STEP = 'DATABASE_SCHEMA';
+// chooses a schema (given that a database has already been selected)
 const SCHEMA_STEP = 'SCHEMA';
 // chooses a database and a schema and provides additional "Segments" option for jumping to SEGMENT_STEP
 const SCHEMA_AND_SEGMENTS_STEP = 'SCHEMA_AND_SEGMENTS';
@@ -28,23 +31,66 @@ const FIELD_STEP = 'FIELD';
 // shows either table or segment list depending on which one is selected
 const SEGMENT_OR_TABLE_STEP = 'SEGMENT_OR_TABLE_STEP';
 
+export const SchemaTableAndSegmentDataSelector = (props) =>
+    <DataSelector
+        steps={[SCHEMA_AND_SEGMENTS_STEP, SEGMENT_OR_TABLE_STEP]}
+        getTriggerElementContent={SchemaAndSegmentTriggerContent}
+        {...props}
+    />
+const SchemaAndSegmentTriggerContent = ({ selectedTable, selectedSegment }) => {
+    if (selectedTable) {
+        return  <span className="text-grey no-decoration">{selectedTable.display_name || selectedTable.name}</span>;
+    } else if (selectedSegment) {
+        return <span className="text-grey no-decoration">{selectedSegment.name}</span>;
+    } else {
+        return <span className="text-grey-4 no-decoration">{t`Pick a segment or table`}</span>;
+    }
+}
+
+export const DatabaseDataSelector = (props) =>
+    <DataSelector
+        steps={[DATABASE_STEP]}
+        getTriggerElementContent={DatabaseTriggerContent}
+        {...props}
+    />
+const DatabaseTriggerContent = ({ selectedDatabase }) =>
+    selectedDatabase
+        ? <span className="text-grey no-decoration">{selectedDatabase.name}</span>
+        : <span className="text-grey-4 no-decoration">{t`Select a database`}</span>
+
+export const SchemaTableAndFieldDataSelector = (props) =>
+    <DataSelector
+        steps={[SCHEMA_STEP, TABLE_STEP, FIELD_STEP]}
+        getTriggerElementContent={FieldTriggerContent}
+        renderAsSelect={true}
+        {...props}
+    />
+const FieldTriggerContent = ({ selectedField }) =>
+    selectedField
+        ? <span className="text-grey no-decoration">{selectedField.display_name || selectedField.name}</span>
+        : <span className="text-grey-4 no-decoration">{t`Select...`}</span>
+
+export const DatabaseSchemaAndTableDataSelector = (props) =>
+    <DataSelector
+        steps={[DATABASE_SCHEMA_STEP, TABLE_STEP]}
+        getTriggerElementContent={TableTriggerContent}
+        {...props}
+    />
+export const SchemaAndTableDataSelector = (props) =>
+    <DataSelector
+        steps={[SCHEMA_STEP, TABLE_STEP]}
+        getTriggerElementContent={TableTriggerContent}
+        {...props}
+    />
+const TableTriggerContent = ({ selectedTable }) =>
+    selectedTable
+        ? <span className="text-grey no-decoration">{selectedTable.display_name || selectedTable.name}</span>
+        : <span className="text-grey-4 no-decoration">{t`Select a table`}</span>
+
 @connect(state => ({metadata: getMetadata(state)}), { fetchTableMetadata })
 export default class DataSelector extends Component {
     constructor(props) {
         super();
-
-        let steps;
-        if (props.setFieldFn) {
-            steps = [SCHEMA_STEP, TABLE_STEP, FIELD_STEP];
-        } else if (props.setSourceTableFn && props.segments) {
-            steps = [SCHEMA_AND_SEGMENTS_STEP, SEGMENT_OR_TABLE_STEP];
-        } else if (props.setSourceTableFn) {
-            steps = [SCHEMA_STEP, TABLE_STEP];
-        } else if (props.setDatabaseFn) {
-            steps = [DATABASE_STEP];
-        } else {
-            throw new Error("Can't figure out what kind of DataSelector to show")
-        }
 
         let selectedSchema, selectedTable;
         let selectedDatabaseId = props.selectedDatabaseId;
@@ -79,10 +125,11 @@ export default class DataSelector extends Component {
         const selectedDatabase = selectedDatabaseId ? databases.find(db => db.id === selectedDatabaseId) : null;
         const hasMultipleSchemas = selectedDatabase && _.uniq(selectedDatabase.tables, (t) => t.schema).length > 1;
 
-        // remove the schema step if we are explicitly skipping db selection and
-        // the selected db does not have more than one schema.
-        if (!hasMultipleSchemas && props.skipDatabaseSelection) {
-            steps.splice(steps.indexOf(SCHEMA_STEP), 1);
+        // remove the schema step if a database is already selected and the database does not have more than one schema.
+        let steps = [...props.steps]
+        if (selectedDatabase && !hasMultipleSchemas && steps.includes(SCHEMA_STEP)) {
+            console.log(selectedDatabase, hasMultipleSchemas, _.uniq(selectedDatabase.tables, (t) => t.schema))
+            steps.splice(props.steps.indexOf(SCHEMA_STEP), 1);
             selectedSchema = selectedDatabase.schemas[0];
         }
 
@@ -101,7 +148,7 @@ export default class DataSelector extends Component {
             selectedSegment,
             selectedField,
             activeStep: null,
-            steps: steps,
+            steps,
             isLoading: false,
         };
     }
@@ -127,7 +174,6 @@ export default class DataSelector extends Component {
     static defaultProps = {
         isInitiallyOpen: false,
         renderAsSelect: false,
-        skipDatabaseSelection: false,
     };
 
     componentWillMount() {
@@ -140,14 +186,15 @@ export default class DataSelector extends Component {
     hydrateActiveStep() {
         if (this.props.selectedFieldId) {
             this.switchToStep(FIELD_STEP);
+        } else if (this.props.selectedSegmentId) {
+            this.switchToStep(SEGMENT_OR_TABLE_STEP);
         } else if (this.props.selectedTableId) {
             if (this.props.segments) {
                 this.switchToStep(SEGMENT_OR_TABLE_STEP);
             } else {
                 this.switchToStep(TABLE_STEP);
             }
-        }
-        else {
+        } else {
             let firstStep = this.state.steps[0];
             this.switchToStep(firstStep)
         }
@@ -252,42 +299,12 @@ export default class DataSelector extends Component {
     }
 
     getTriggerElement() {
-        const { className, style, triggerIconSize } = this.props
-        const { selectedDatabase, selectedSegment, selectedTable, selectedField, steps } = this.state;
-
-        let content;
-        if (steps.includes(FIELD_STEP)) {
-            if (selectedField) {
-                content = <span className="text-grey no-decoration">{selectedField.display_name || selectedField.name}</span>;
-            } else {
-                content = <span className="text-grey-4 no-decoration">{t`Select...`}</span>;
-            }
-        }
-        else if (steps.includes(SEGMENT_OR_TABLE_STEP)) {
-            if (selectedTable) {
-                content = <span className="text-grey no-decoration">{selectedTable.display_name || selectedTable.name}</span>;
-            } else if (selectedSegment) {
-                content = <span className="text-grey no-decoration">{selectedSegment.name}</span>;
-            } else {
-                content = <span className="text-grey-4 no-decoration">{t`Pick a segment or table`}</span>;
-            }
-        } else if (steps.includes(TABLE_STEP)) {
-            if (selectedTable) {
-                content = <span className="text-grey no-decoration">{selectedTable.display_name || selectedTable.name}</span>;
-            } else {
-                content = <span className="text-grey-4 no-decoration">{t`Select a table`}</span>;
-            }
-        } else {
-            if (selectedDatabase) {
-                content = <span className="text-grey no-decoration">{selectedDatabase.name}</span>;
-            } else {
-                content = <span className="text-grey-4 no-decoration">{t`Select a database`}</span>;
-            }
-        }
+        const { className, style, triggerIconSize, getTriggerElementContent } = this.props
+        const { selectedDatabase, selectedSegment, selectedTable, selectedField } = this.state;
 
         return (
             <span className={className || "px2 py2 text-bold cursor-pointer text-default"} style={style}>
-                {content}
+                { getTriggerElementContent({ selectedDatabase, selectedSegment, selectedTable, selectedField }) }
                 <Icon className="ml1" name="chevrondown" size={triggerIconSize || 8}/>
             </span>
         );
@@ -303,13 +320,18 @@ export default class DataSelector extends Component {
                 selectedDatabase={selectedDatabase}
                 onChangeDatabase={this.onChangeDatabase}
             />;
-            case SCHEMA_STEP: return <DatabaseSchemaPicker
-                 skipDatabaseSelection={skipDatabaseSelection}
-                 databases={databases}
+            case DATABASE_SCHEMA_STEP: return <DatabaseSchemaPicker
+                skipDatabaseSelection={skipDatabaseSelection}
+                databases={databases}
+                selectedDatabase={selectedDatabase}
+                selectedSchema={selectedSchema}
+                onChangeSchema={this.onChangeSchema}
+                onChangeDatabase={this.onChangeDatabase}
+            />;
+            case SCHEMA_STEP: return <SchemaPicker
                  selectedDatabase={selectedDatabase}
                  selectedSchema={selectedSchema}
                  onChangeSchema={this.onChangeSchema}
-                 onChangeDatabase={this.onChangeDatabase}
             />;
             case SCHEMA_AND_SEGMENTS_STEP: return <SegmentAndDatabasePicker
                 databases={databases}
@@ -447,69 +469,67 @@ const SegmentAndDatabasePicker = ({ databases, selectedSchema, onChangeSchema, o
     );
 }
 
+export const SchemaPicker = ({ selectedDatabase, selectedSchema, onChangeSchema }) => {
+    let sections = [{
+        items: selectedDatabase.schemas
+    }];
+    return (
+        <div style={{ width: 300 }}>
+            <AccordianList
+                id="DatabaseSchemaPicker"
+                key="databaseSchemaPicker"
+                className="text-brand"
+                sections={sections}
+                searchable
+                onChange={onChangeSchema}
+                itemIsSelected={(schema) => schema === selectedSchema}
+                renderItemIcon={() => <Icon name="folder" size={16} />}
+            />
+        </div>
+    );
+}
+
 export const DatabaseSchemaPicker = ({ skipDatabaseSelection, databases, selectedDatabase, selectedSchema, onChangeSchema, onChangeDatabase }) => {
         if (databases.length === 0) {
             return <DataSelectorLoading />
         }
 
-        // this case will only happen if the db is already selected on init time and
-        // the db has multiple schemas to select.
-        if (skipDatabaseSelection) {
-            let sections = [{
-                items: selectedDatabase.schemas
-            }];
-            return (
-                <div style={{ width: 300 }}>
-                    <AccordianList
-                        id="DatabaseSchemaPicker"
-                        key="databaseSchemaPicker"
-                        className="text-brand"
-                        sections={sections}
-                        searchable
-                        onChange={onChangeSchema}
-                        itemIsSelected={(schema) => schema === selectedSchema}
-                        renderItemIcon={() => <Icon name="folder" size={16} />}
-                    />
-                </div>
-            );
-        } else {
-            const sections = databases.map(database => ({
-                name: database.name,
-                items: database.schemas.length > 1 ? database.schemas : [],
-                className: database.is_saved_questions ? "bg-slate-extra-light" : null,
-                icon: database.is_saved_questions ? 'all' : 'database'
-            }));
+        const sections = databases.map(database => ({
+            name: database.name,
+            items: database.schemas.length > 1 ? database.schemas : [],
+            className: database.is_saved_questions ? "bg-slate-extra-light" : null,
+            icon: database.is_saved_questions ? 'all' : 'database'
+        }));
 
-            let openSection = selectedSchema && _.findIndex(databases, (db) => _.find(db.schemas, selectedSchema));
-            if (openSection >= 0 && databases[openSection] && databases[openSection].schemas.length === 1) {
-                openSection = -1;
-            }
-
-            return (
-                <div>
-                    <AccordianList
-                        id="DatabaseSchemaPicker"
-                        key="databaseSchemaPicker"
-                        className="text-brand"
-                        sections={sections}
-                        onChange={onChangeSchema}
-                        onChangeSection={(dbId) => onChangeDatabase(dbId, true)}
-                        itemIsSelected={(schema) => schema === selectedSchema}
-                        renderSectionIcon={item =>
-                            <Icon
-                                className="Icon text-default"
-                                name={item.icon}
-                                size={18}
-                            />
-                        }
-                        renderItemIcon={() => <Icon name="folder" size={16} />}
-                        initiallyOpenSection={openSection}
-                        showItemArrows={true}
-                        alwaysTogglable={true}
-                    />
-                </div>
-            );
+        let openSection = selectedSchema && _.findIndex(databases, (db) => _.find(db.schemas, selectedSchema));
+        if (openSection >= 0 && databases[openSection] && databases[openSection].schemas.length === 1) {
+            openSection = -1;
         }
+
+        return (
+            <div>
+                <AccordianList
+                    id="DatabaseSchemaPicker"
+                    key="databaseSchemaPicker"
+                    className="text-brand"
+                    sections={sections}
+                    onChange={onChangeSchema}
+                    onChangeSection={(dbId) => onChangeDatabase(dbId, true)}
+                    itemIsSelected={(schema) => schema === selectedSchema}
+                    renderSectionIcon={item =>
+                        <Icon
+                            className="Icon text-default"
+                            name={item.icon}
+                            size={18}
+                        />
+                    }
+                    renderItemIcon={() => <Icon name="folder" size={16} />}
+                    initiallyOpenSection={openSection}
+                    showItemArrows={true}
+                    alwaysTogglable={true}
+                />
+            </div>
+        );
 
     }
 
@@ -517,7 +537,7 @@ export const TablePicker = ({ selectedDatabase, selectedSchema, selectedTable, d
     const isSavedQuestionList = selectedDatabase.is_saved_questions;
     let header = (
         <div className="flex flex-wrap align-center">
-                <span className="flex align-center text-brand-hover cursor-pointer" onClick={onBack}>
+                <span className={cx("flex align-center", { "text-brand-hover cursor-pointer": onBack })} onClick={onBack}>
                     {onBack && <Icon name="chevronleft" size={18} /> }
                     <span className="ml1">{selectedDatabase.name}</span>
                 </span>
@@ -581,7 +601,7 @@ export class FieldPicker extends Component {
             <span className="flex align-center">
                     <span className="flex align-center text-slate cursor-pointer" onClick={onBack}>
                         <Icon name="chevronleft" size={18} />
-                        <span className="ml1">{t`Fields`}</span>
+                        <span className="ml1">{ selectedTable.display_name || t`Fields`}</span>
                     </span>
                 </span>
         );
@@ -661,7 +681,7 @@ export const SegmentPicker = ({ segments, selectedSegment, disabledSegmentIds, o
             searchable
             searchPlaceholder={t`Find a segment`}
             onChange={onChangeSegment}
-            itemIsSelected={(item) => selectedSegment && item.segment ? item.segment.id === selectedSegment : false}
+            itemIsSelected={(item) => selectedSegment && item.segment ? item.segment.id === selectedSegment.id : false}
             itemIsClickable={(item) => item.segment && !item.disabled}
             renderItemIcon={(item) => item.segment ? <Icon name="segment" size={18} /> : null}
         />
