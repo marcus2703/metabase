@@ -23,7 +23,7 @@ msgstr ""
 
 #: frontend/src/metabase/home/components/Activity.jsx:131
 msgid "Hello World!"
-msgstr "Hello World!"
+msgstr "Olá Mundo!"
 
 #: frontend/src/metabase/home/components/Activity.jsx:132
 msgid "Metabase is up and running."
@@ -35,7 +35,7 @@ msgstr "removeu o filtro {item.details.name}"
 
 #: frontend/src/metabase/home/components/Activity.jsx:179
 msgid "joined!"
-msgstr "ingressou!"
+msgstr "Entrou!"
 
 #: frontend/src/metabase/home/components/NextStep.jsx:31
 msgid "Setup Tip"
@@ -51,7 +51,7 @@ msgstr "Visto Recentemente"
 
 #: frontend/src/metabase/home/components/RecentViews.jsx:60
 msgid "You haven't looked at any dashboards or questions recently"
-msgstr "Você não examinou nenhum painel ou perguntas recentemente"
+msgstr "Você não viu nenhum painel ou perguntas recentemente"
 
 #: frontend/src/metabase/home/containers/HomepageApp.jsx:93
 msgid "Activity"
@@ -59,7 +59,7 @@ msgstr "Atividade"
 
 #: frontend/src/metabase/lib/greeting.js:2
 msgid "Hey there"
-msgstr "Olá"
+msgstr "E aí"
 
 #: frontend/src/metabase/lib/greeting.js:3
 #: frontend/src/metabase/lib/greeting.js:25
@@ -76,7 +76,7 @@ msgstr "Saudações"
 
 #: frontend/src/metabase/lib/greeting.js:6
 msgid "Good to see you"
-msgstr "Bom ver você"
+msgstr "Que bom te ver"
 
 #: frontend/src/metabase/lib/greeting.js:10
 msgid "What do you want to know?"
@@ -100,7 +100,7 @@ msgstr "Perguntas"
 
 #: frontend/src/metabase/nav/containers/Navbar.jsx:135
 msgid "Pulses"
-msgstr ""
+msgstr "Pulsos"
 
 #: frontend/src/metabase/nav/containers/Navbar.jsx:138
 msgid "Data Reference"
